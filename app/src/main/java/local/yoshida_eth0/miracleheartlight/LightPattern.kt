@@ -7,7 +7,13 @@ import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
 
-// 1. 振る舞いを表すデータクラスを定義
+/**
+ * ライトの点灯パターン（振る舞い）を定義するデータクラス。
+ *
+ * @property signal このライトアクションをトリガーする信号。
+ * @property name パターンの名前（デバッグや識別に利用）。
+ * @property behavior ライトの具体的な振る舞いを定義するコルーチン。色を引数として受け取る関数を介してUIに色を通知する。
+ */
 data class LightAction(
     val signal: Int,
     val name: String,
@@ -15,20 +21,26 @@ data class LightAction(
 )
 
 /**
- * ライトの光り方を定義し、実行するクラス。
+ * 特定の信号に基づいて、定義されたライトの光り方を実行するクラス。
+ *
+ * @property offColor ライトが消灯しているときの色。デフォルトは黒。
  */
 class LightPattern(private val offColor: Color = Color.Black) {
 
-    // delayPerStepはアニメーションの滑らかさ(fps)を定義するため、インスタンス変数として維持
+    // アニメーションの各ステップ間の遅延時間（ミリ秒）。これによりアニメーションの滑らかさが決まる。
     private val delayPerStep: Long = 50L
 
+    // 事前定義された色の定数
     private val colorPink: Color = color("#EA9198")
     private val colorPinkWhite: Color = color("#FFC0CB")
     private val colorPurple: Color = color("#A757A8")
     private val colorLightBlue: Color = color("#9DCCE0")
     private val colorOrange: Color = color("#FFA500")
 
-    // 2. SignalとLightActionをマッピングするMapを定義
+    /**
+     * 利用可能なすべてのライトパターンのリスト。
+     * 各パターンは `LightAction` データクラスで定義される。
+     */
     val patternList = listOf(
         LightAction(
             signal = 1,
@@ -191,38 +203,51 @@ class LightPattern(private val offColor: Color = Color.Black) {
             behavior = { action -> lighting(colorPink, action) }
         ),
     )
-    // patternListからsignalをキーとするMapを作成
+
+    /**
+     * `patternList` を `signal` をキーとするマップに変換し、高速な検索を可能にする。
+     */
     val patternMap: Map<Int, LightAction> = patternList.associateBy { it.signal }
 
     /**
-     * 指定されたシグナル名に対応する光のパターンを実行します。
-     * @param signal SignalAnalyzerから受け取ったシグナル。
-     * @param action 計算された色をUIに反映するための処理。
+     * 指定されたシグナルに対応する光のパターンを実行する。
+     *
+     * @param signal `SignalAnalyzer` から受け取った、実行すべきパターンを決定するための信号。
+     * @param action 計算された色をUI（または他の描画先）に反映するためのコールバック関数。
      */
     suspend fun execute(signal: Int, action: (Color) -> Unit) {
-        // Mapから対応するLightActionを探し、なければ何もしない
+        // マップから対応するLightActionを検索し、存在すればその振る舞いを実行する。
         val lightAction = patternMap[signal]
         lightAction?.behavior?.invoke(action)
     }
 
-    // --- 以下は、振る舞いを定義するためのヘルパーメソッド群 (privateに変更) ---
+    // --- 以下、光の振る舞いを定義するためのプライベートヘルパーメソッド群 ---
 
     /**
-     * 指定された単一の色を一度だけ通知します。
+     * 指定された単一の色を一度だけ通知し、点灯状態を維持する。
+     *
+     * @param color 表示する色。
+     * @param action 色を通知するためのコールバック。
      */
     private suspend fun lighting(color: Color, action: (Color) -> Unit) {
         action(color)
     }
 
     /**
-     * ライトを消灯します（offColorを通知します）。
+     * ライトを消灯する（`offColor` を通知する）。
+     *
+     * @param action 色を通知するためのコールバック。
      */
-    public suspend fun turnOff(action: (Color) -> Unit) {
+    suspend fun turnOff(action: (Color) -> Unit) {
         action(offColor)
     }
 
     /**
-     * 指定された色のアルファ値を滑らかに変化させ（点滅させ）、その結果を無限に通知するサスペンド関数。
+     * 指定された色で点滅（フェードイン・フェードアウト）を繰り返す。
+     *
+     * @param color 点滅させる色。
+     * @param durationMillis 1回の点滅（フェードイン〜フェードアウト）にかかる時間。
+     * @param action 色を通知するためのコールバック。
      */
     private suspend fun blinking(color: Color, durationMillis: Long, action: (Color) -> Unit) {
         while (true) {
@@ -231,36 +256,42 @@ class LightPattern(private val offColor: Color = Color.Black) {
     }
 
     /**
-     * 2つの点灯をループさせるアニメーション。
-     * @param color1 1つ目の点灯の色。
-     * @param color2 2つ目の点灯の色。
-     * @param action 色を通知するための処理。
+     * 2つの異なる色の点滅を交互に繰り返す。
+     *
+     * @param color1 1つ目の点滅色。
+     * @param color2 2つ目の点滅色。
+     * @param durationMillis1 1つ目の色の点滅時間。
+     * @param durationMillis2 2つ目の色の点滅時間。
+     * @param action 色を通知するためのコールバック。
      */
     private suspend fun blinking2(color1: Color, color2: Color, durationMillis1: Long, durationMillis2: Long, action: (Color) -> Unit) {
         while (true) {
-            // 1つ目の点灯
             blinkOnce(color1, durationMillis1, action)
-            // 2つ目の点灯
             blinkOnce(color2, durationMillis2, action)
         }
     }
 
 
     /**
-     * 指定された色で1回だけ点滅（フェードイン・フェードアウト）する。
+     * 指定された色で1回だけ点滅（フェードイン・フェードアウト）を行う。
+     * `sin` カーブを利用して滑らかな輝度変化を実現する。
+     *
      * @param color 点滅する色。
      * @param durationMillis 1回の点滅にかかる時間。
-     * @param action 色を通知するための処理。
+     * @param action 色を通知するためのコールバック。
      */
     private suspend fun blinkOnce(color: Color, durationMillis: Long, action: (Color) -> Unit) {
         val steps = (durationMillis / delayPerStep).toInt()
         if (steps <= 0) {
-            action(offColor) // durationが短すぎる場合は消灯色を即座に表示
+            action(offColor) // durationが短すぎる場合は即座に消灯色を表示
             return
         }
         for (step in 0..steps) {
+            // 進行度を角度に変換 (0 -> PI)
             val angle = (step.toDouble() / steps) * PI
+            // sinカーブで輝度の割合を計算 (0 -> 1 -> 0)
             val fraction = sin(angle).toFloat()
+            // 開始色(offColor)と目的色(color)を線形補間
             val blendedColor = lerp(start = offColor, stop = color, fraction = fraction)
             action(blendedColor)
             delay(delayPerStep)
@@ -268,9 +299,11 @@ class LightPattern(private val offColor: Color = Color.Black) {
     }
 
     /**
-     * 複数の色を順番にグラデーションさせます
+     * 色のリストを順番に滑らかに遷移させるグラデーションを繰り返す。
+     *
      * @param colors グラデーションさせる色のリスト。
-     * @param action 色を通知するための処理。
+     * @param durationMillis 各色間の遷移にかかる時間。
+     * @param action 色を通知するためのコールバック。
      */
     private suspend fun gradation(colors: List<Color>, durationMillis: Long, action: (Color) -> Unit) {
         var currentColor = offColor
@@ -279,7 +312,8 @@ class LightPattern(private val offColor: Color = Color.Black) {
                 transition(
                     from = currentColor,
                     to = color,
-                    durationMillis = if (currentColor!=offColor) durationMillis else durationMillis / 2,
+                    // 最初の色への遷移は半分の時間で行う
+                    durationMillis = if (currentColor != offColor) durationMillis else durationMillis / 2,
                     action
                 )
                 currentColor = color
@@ -287,19 +321,26 @@ class LightPattern(private val offColor: Color = Color.Black) {
         }
     }
 
+    /**
+     * `gradation` の特殊版。ループの初回と2回目以降で遷移時間が異なる。
+     *
+     * @param colors グラデーションさせる色のリスト。
+     * @param durationMillis ループ初回での各色間の遷移時間。
+     * @param durationMillis2 ループ2回目以降での各色間の遷移時間。
+     * @param action 色を通知するためのコールバック。
+     */
     private suspend fun gradation2(colors: List<Color>, durationMillis: Long, durationMillis2: Long, action: (Color) -> Unit) {
         var currentColor = offColor
-        var loopCount = 0 // whileループの回数を追跡するカウンター
+        var loopCount = 0
 
         while (true) {
             colors.forEachIndexed { index, color ->
-                // durationを決定するロジック
                 val duration = when {
-                    // whileループ1回目(loopCount=0) かつ colorsのループ0要素目(index=0)
+                    // 初回の最初の遷移は半分の時間
                     loopCount == 0 && index == 0 -> durationMillis / 2
-                    // whileループ1回目(loopCount=0) かつ 0要素目以外
+                    // 初回ループのそれ以降の遷移
                     loopCount == 0 -> durationMillis
-                    // whileループ2回目以降 (loopCount > 0)
+                    // 2回目以降のループの遷移
                     else -> durationMillis2
                 }
 
@@ -311,22 +352,24 @@ class LightPattern(private val offColor: Color = Color.Black) {
                 )
                 currentColor = color
             }
-            loopCount++ // whileループのカウンターをインクリメント
+            loopCount++
         }
     }
 
 
     /**
-     * 2つの色の間で滑らかなグラデーション（線形補間）を行います。
+     * 2つの色（`from` と `to`）の間を滑らかに遷移させる。
+     * 線形補間（lerp）を用いて中間色を計算する。
+     *
      * @param from 開始色。
      * @param to 終了色。
-     * @param durationMillis この遷移にかける時間。
-     * @param action 色を通知するための処理。
+     * @param durationMillis 遷移にかかる時間。
+     * @param action 色を通知するためのコールバック。
      */
     private suspend fun transition(from: Color, to: Color, durationMillis: Long, action: (Color) -> Unit) {
         val steps = (durationMillis / delayPerStep).toInt()
         if (steps <= 0) {
-            action(to)
+            action(to) // durationが短すぎる場合は即座に終了色を表示
             return
         }
         for (step in 0..steps) {
@@ -338,7 +381,10 @@ class LightPattern(private val offColor: Color = Color.Black) {
     }
 
     /**
-     * 16進数のカラーコード文字列からComposeのColorオブジェクトを生成します。
+     * 16進数のカラーコード文字列（例: "#FFFFFF"）をComposeの `Color` オブジェクトに変換する。
+     *
+     * @param hex 16進数カラーコード。
+     * @return 対応する `Color` オブジェクト。
      */
     private fun color(hex: String): Color {
         return Color(hex.toColorInt())

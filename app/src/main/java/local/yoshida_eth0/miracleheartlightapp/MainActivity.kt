@@ -17,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -37,26 +36,38 @@ class MainActivity : ComponentActivity() {
     private lateinit var capture: FrequenciesCapture
     private lateinit var analyzer: SignalAnalyzer
     private lateinit var lightPattern: LightPattern
-    private var currentLightAction: LightAction? = null
 
     // --- UIの状態を保持するStateを定義 ---
+    // 周波数とその強度を保持するState
     private val _frequencyMagnitudes = mutableStateOf<Map<Int, Float>>(emptyMap())
     private val frequencyMagnitudes: State<Map<Int, Float>> = _frequencyMagnitudes
-    private val _signalName = mutableStateOf("")
-    private val signalName: State<String> = _signalName
+    // 検出されたシグナルに対応するLightActionを保持するState
+    private val _detectedLightAction = mutableStateOf<LightAction?>(null)
+    private val detectedLightAction: State<LightAction?> = _detectedLightAction
+
+    // 現在実行中のLightActionを保持するState
+    private val _activeLightAction = mutableStateOf<LightAction?>(null)
+    private val activeLightAction: State<LightAction?> = _activeLightAction
 
     // 背景色とアニメーションジョブの状態
-    private val _backgroundColor = mutableStateOf(Color.Black)
-    private val backgroundColor: State<Color> = _backgroundColor
+    // 背景色を保持するState
+    private val _lightColor = mutableStateOf(Color.Black)
+    private val lightColor: State<Color> = _lightColor
+    // 色変更アニメーションのコルーチンジョブ
     private var colorChangeJob: Job? = null
 
+    // 画面の元の明るさを保持する変数
     private var originalBrightness: Float = -1f
+    private val enabledFullBrightness: Boolean = false // ビルド時に適宜変更
 
+    // 権限リクエストの結果をハンドリングするランチャー
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
+                // 権限が許可された場合はキャプチャを開始
                 capture.start()
             } else {
+                // 権限が拒否された場合はエラーログを出力
                 Log.e("MainActivity", "Permission for RECORD_AUDIO was denied.")
             }
         }
@@ -64,48 +75,55 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 音声処理関連のクラスを初期化
         capture = FrequenciesCapture(this)
         analyzer = SignalAnalyzer()
         lightPattern = LightPattern()
 
         // --- リスナー内でStateを更新 ---
+        // FrequenciesCaptureからのコールバックを設定
         capture.onFrequenciesCaptured = { newMagnitudes ->
-            // DoubleをFloatに変換し、Stateを更新する
-            val newIntMagnitudes = newMagnitudes.mapValues { it.value.toInt() }
-            //Log.d("MainActivity", "Captured frequencies: $newIntMagnitudes")
+            // SignalAnalyzerに新しい周波数データを渡して更新
             analyzer.update(newMagnitudes)
+            // UI表示用にStateを更新
             _frequencyMagnitudes.value = newMagnitudes.mapValues { it.value.toFloat() }
         }
 
-        // --- シグナル変更リスナーを設定 ---
+        // SignalAnalyzerからのコールバックを設定
         analyzer.onSignalChanged = { signal ->
-            // UIスレッドで実行
+            // UIの更新はメインスレッドのCoroutineScopeで実行
             lifecycleScope.launch {
                 if (lightPattern.patternMap.containsKey(signal)) {
-                    // 定義されたシグナルの場合
+                    // 定義済みのシグナルの場合
                     Log.d("MainActivity", "defined signal: $signal")
                     val lightAction = lightPattern.patternMap[signal]!!
-                    _signalName.value = "${lightAction.signal}: ${lightAction.name}"
+                    // シグナル名を表示用に更新
+                    _detectedLightAction.value = lightAction
 
-                    if (currentLightAction?.signal != lightAction.signal) {
+                    if (_activeLightAction.value?.signal != lightAction.signal) {
+                        // 異なるシグナルが検出された場合
                         Log.d("MainActivity", "change LightAction: ${lightAction.signal}: ${lightAction.name}")
-                        currentLightAction = lightAction
+                        _activeLightAction.value = lightAction
 
-                        // 既存の色変更ジョブがあればキャンセル
+                        // 実行中のアニメーションがあればキャンセル
                         colorChangeJob?.cancel()
 
-                        // 新しい色変更ジョブを開始
+                        // 新しいアニメーションのコルーチンを開始
                         colorChangeJob = launch {
-                            // LightPattern.executeを呼び出してアニメーション処理を委譲
+                            // LightPatternに処理を委譲し、色の更新をコールバックで受け取る
                             lightPattern.execute(signal) { color ->
-                                _backgroundColor.value = color
+                                _lightColor.value = color
                             }
                         }
                     }
                 } else {
                     // 未定義のシグナルの場合
                     Log.d("MainActivity", "undefined signal: $signal")
-                    _signalName.value = "$signal: 未定義"
+                    _detectedLightAction.value = LightAction(
+                        signal = signal,
+                        name = "未定義",
+                        behavior = { action -> null }
+                    )
                 }
             }
         }
@@ -114,34 +132,66 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MiracleHeartLightAppTheme {
-                // --- 画面全体を上下に分割するColumn ---
+                // 画面全体を上下に分割するColumn
                 Column(modifier = Modifier.fillMaxSize()) {
 
-                    // --- 上半分：背景色 --- (元は下半分)
+                    // 上半分：ライトの色を表示する領域
                     Box(
                         modifier = Modifier
                             .weight(1f) // 上半分を占める
                             .fillMaxWidth()
-                            .background(backgroundColor.value) // Stateに連動した背景色
+                            .background(lightColor.value) // Stateに連動した背景色
                     )
 
-                    // --- 中間：シグナル名表示 ---
-                    Text(
-                        text = signalName.value,
+                    // 中間：LightAction名表示
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.DarkGray) // 背景色で見やすくする
-                            .padding(8.dp),
-                        color = Color.White, // 文字色
-                        textAlign = TextAlign.Center,
-                        fontSize = 16.sp
-                    )
+                            .background(Color.DarkGray)
+                            .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
+                        verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
+                    ) {
+                        // 表示中のシグナル名を表示
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "表示",
+                                color = Color.LightGray, // ラベルの色を薄いグレーに
+                                fontSize = 16.sp,
+                                modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
+                            )
+                            Text(
+                                text = activeLightAction.value?.let { "${it.signal}: ${it.name}" } ?: "---",
+                                color = Color.White,
+                                fontSize = 16.sp
+                            )
+                        }
 
-                    // --- 下半分：棒グラフ --- (元は上半分)
+                        // 検出されたシグナル名を表示
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "検出",
+                                color = Color.LightGray, // ラベルの色を薄いグレーに
+                                fontSize = 16.sp,
+                                modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
+                            )
+                            Text(
+                                text = detectedLightAction.value?.let { "${it.signal}: ${it.name}" } ?: "---",
+                                color = Color.White,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+
+                    // 下半分：周波数の強度を可視化する棒グラフ
                     Scaffold(
                         modifier = Modifier
                             .weight(1f) // 下半分を占める
-                            .fillMaxWidth()
+                            .fillMaxWidth(),
+                        containerColor = Color(0xFF1C1C1E)
                     ) { innerPadding ->
                         FrequencyBarGraph(
                             magnitudes = frequencyMagnitudes.value,
@@ -157,59 +207,70 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 画面を常にオンに設定
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val layoutParams = window.attributes
-        originalBrightness = layoutParams.screenBrightness
-        layoutParams.screenBrightness = 1.0f
-        window.attributes = layoutParams
+        // 画面の明るさを最大に設定
+        if (enabledFullBrightness) {
+            val layoutParams = window.attributes
+            originalBrightness = layoutParams.screenBrightness // 元の明るさを保存
+            layoutParams.screenBrightness = 1.0f
+            window.attributes = layoutParams
+        }
 
-        // 背景色を黒に戻す
-        _backgroundColor.value = Color.Black
-        _signalName.value = ""
-        currentLightAction = null
+        // 各状態をリセット
+        _lightColor.value = Color.Black
+        _detectedLightAction.value = null
+        _activeLightAction.value = null
 
+        // 権限を確認し、音声キャプチャを開始
         checkPermissionAndStartCapture()
     }
 
     override fun onPause() {
         super.onPause()
+        // 画面常時オンを解除
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val layoutParams = window.attributes
-        layoutParams.screenBrightness = originalBrightness
-        window.attributes = layoutParams
+        // 画面の明るさを元に戻す
+        if (enabledFullBrightness) {
+            val layoutParams = window.attributes
+            layoutParams.screenBrightness = originalBrightness
+            window.attributes = layoutParams
+        }
 
-        // 色変更ジョブをキャンセル
+        // 実行中のアニメーションをキャンセル
         colorChangeJob?.cancel()
+        // 音声キャプチャを停止
         capture.stop()
     }
 
     private fun checkPermissionAndStartCapture() {
         when (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)) {
             PackageManager.PERMISSION_GRANTED -> {
+                // すでに権限がある場合はキャプチャを開始
                 capture.start()
             }
             else -> {
+                // 権限がない場合はリクエストダイアログを表示
                 requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
     }
 }
 
-// --- 以下は変更なし ---
 @Composable
 fun FrequencyBarGraph(
     magnitudes: Map<Int, Float>,
     modifier: Modifier = Modifier
 ) {
-    val normalizationCap = 20_000f
+    val normalizationCap = 40_000f
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(300.dp)
-            .padding(16.dp),
+            .padding(16.dp, 0.dp, 16.dp, 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
@@ -219,18 +280,19 @@ fun FrequencyBarGraph(
                 verticalArrangement = Arrangement.Bottom,
                 modifier = Modifier.weight(1f)
             ) {
-                val normalizedHeight = (magnitude / normalizationCap).coerceIn(0f, 1f)
+                val normalizedHeight = (magnitude / normalizationCap).coerceIn(0f, 0.9f)
                 Box(
                     modifier = Modifier
                         .width(30.dp)
                         .fillMaxHeight(normalizedHeight)
-                        .background(Color.Cyan)
+                        .background(Color(0xFF008B8B))
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "${freq}Hz",
                     fontSize = 12.sp,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    color = Color.White
                 )
             }
         }

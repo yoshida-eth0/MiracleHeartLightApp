@@ -1,23 +1,41 @@
 package local.yoshida_eth0.miracleheartlight
 
-import android.util.Log
-
+/**
+ * `SignalAnalyzer` から新しい信号が検出されたときに呼び出されるリスナーの型エイリアス。
+ *
+ * @param signal 検出された新しい信号（整数値）。
+ */
 typealias OnSignalChangedListener = (signal: Int) -> Unit
 
 /**
- * @param config 音声キャプチャとFFTに関する設定。
+ * 周波数強度の履歴を分析し、特定のパターンに基づいて信号を検出するクラス。
+ *
+ * @property config 音声処理とFFTに関する設定を保持する `Config` インスタンス。
  */
 class SignalAnalyzer (private val config: Config = Config.sharedInstance) {
 
+    /**
+     * 新しい信号が検出されたときに通知を受け取るためのリスナー。
+     */
     var onSignalChanged: OnSignalChangedListener? = null
 
+    /**
+     * 現在検出されている信号。
+     * この値は `update` メソッドによってのみ更新される。
+     */
     var currentSignal: Int = 0
         private set
 
+    // 解析する周波数履歴のサイズ。過去1秒間を解析対象とするためサンプリングレートをFFTサイズで割った値に等しい。
     private val analyzeSize: Int = config.sampleRate / config.fftSize
+    // 最近の最も強い周波数の履歴を保持するリスト。
     private val history: MutableList<Int> = MutableList(analyzeSize) { 0 }
 
     companion object {
+        /**
+         * 信号として認識される有効な周波数パターンの定義。
+         * このパターンのシーケンスが履歴内で検出されると、信号が生成される。
+         */
         private val validPattern = listOf(
             listOf(18500),
             listOf(18750, 19250),
@@ -30,14 +48,22 @@ class SignalAnalyzer (private val config: Config = Config.sharedInstance) {
         )
     }
 
+    /**
+     * 新しい周波数強度データを受け取り、履歴を更新して信号を再評価する。
+     * このメソッドはスレッドセーフである。
+     *
+     * @param frequencyMagnitudes 周波数とその強度のマップ。
+     */
     @Synchronized
     fun update(frequencyMagnitudes: Map<Int, Double>) {
+        // 新しい最強周波数を履歴に追加
         history.add(getStrongestFrequency(frequencyMagnitudes))
+        // 履歴がサイズを超えたら最も古いデータを削除
         if (history.size > analyzeSize) {
             history.removeAt(0)
         }
 
-        // 有効なシグナルが更新された場合
+        // 新しい信号を履歴から抽出し、現在の信号と異なる場合はリスナーに通知
         val newSignal = getSignal()
         if (newSignal != -1 && newSignal != currentSignal) {
             currentSignal = newSignal
@@ -46,55 +72,61 @@ class SignalAnalyzer (private val config: Config = Config.sharedInstance) {
     }
 
     /**
-     * Calculates the strongest frequency from the given frequency magnitudes.
+     * 与えられた周波数強度のマップから、最も顕著な周波数を特定する。
+     * 最強周波数が他の周波数と比較して十分に強い場合にのみ、その周波数を返す。
      *
-     * @param frequencyMagnitudes A map where keys are frequencies and values are their magnitudes.
-     * @return The frequency with the highest magnitude, or 0 if the map is empty.
+     * @param frequencyMagnitudes 周波数とその強度のマップ。
+     * @return 最も強い周波数。条件を満たさない、またはマップが空の場合は0を返す。
      */
     fun getStrongestFrequency(frequencyMagnitudes: Map<Int, Double>): Int {
         if (frequencyMagnitudes.isEmpty()) {
             return 0
         }
 
-        // 最も強い周波数
+        // 最も強度が大きいエントリを検索
         val maxEntry = frequencyMagnitudes.maxBy { it.value }
 
-        // 最も強い周波数を除いたmagnitudeの平均値
+        // ベースラインとなる他の周波数の平均強度を計算
         val baseMagnitude = frequencyMagnitudes.filter { it.key != maxEntry.key }.values.average()
 
-        // 最も強い周波数のmagnitudeが500以上且つ偏差の3倍
+        // 最強周波数が閾値（500）を超え、かつベースラインの3倍より大きいか評価
         if (maxEntry.value >= 500 && maxEntry.value > baseMagnitude * 3) {
             return maxEntry.key
         }
         return 0
     }
 
+    /**
+     * 周波数履歴を分析し、`validPattern` に一致するシーケンスを探して信号を抽出する。
+     *
+     * @return 検出された信号（ビット演算によって生成された整数）。パターンに一致しない場合は-1を返す。
+     */
     private fun getSignal(): Int {
-        // 0を除外
+        // 履歴から0（無音または無効な周波数）を除外
         val nonZeroHistory = history.filter { it != 0 }
 
-        // 連続する値を除外
+        // 連続する同じ周波数をフィルタリングし、変化点のみを抽出
         val normalizedHistory = nonZeroHistory.filterIndexed { index, value ->
             index == 0 || value != nonZeroHistory[index - 1]
         }
 
-        // validPatternに一致する部分シーケンスを後ろから探し、見つかったらそれを基にシグナルを生成する
+        // 履歴の後方から `validPattern` に一致する部分シーケンスを検索
         return normalizedHistory
-            .windowed(validPattern.size,1) // リストをvalidPatternのサイズでスライディングウィンドウ化
-            .findLast { sublist -> // ウィンドウを後ろから検索
-                // 各ウィンドウ（sublist）がvalidPatternに一致するかチェック
+            .windowed(validPattern.size, 1)
+            .findLast { sublist ->
+                // 各ウィンドウ（sublist）が `validPattern` の各ステップの条件を満たすかチェック
                 sublist.withIndex().all { (index, value) ->
                     value in validPattern[index]
                 }
             }
             ?.mapIndexed { index, value ->
-                // 一致したsublistの各要素が、validPatternのサブリスト内で何番目のインデックスかを計算する
+                // 一致した周波数が `validPattern` の中で何番目の選択肢か（0 or 1）を特定
                 validPattern[index].indexOf(value)
             }
             ?.fold(0) { acc, bit ->
-                // 左に1ビットシフトし、新しいビットを加算(OR)する
+                // ビットを組み立てて最終的な信号（整数）を生成
                 (acc shl 1) or bit
             }
-            ?: -1 // 一致するものがなければ-1を返す
+            ?: -1 // 一致するパターンが見つからなければ-1を返す
     }
 }

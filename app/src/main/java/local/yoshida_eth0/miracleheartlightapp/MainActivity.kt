@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
                     _detectedLightAction.value = LightAction(
                         signal = signal,
                         name = "未定義",
-                        behavior = { action -> null }
+                        behavior = null
                     )
                 }
             }

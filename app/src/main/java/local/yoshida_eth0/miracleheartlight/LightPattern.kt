@@ -4,20 +4,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.core.graphics.toColorInt
 import kotlinx.coroutines.delay
-import kotlin.math.PI
-import kotlin.math.sin
+import local.yoshida_eth0.miracleheartlight.BlinkEasing.SharpBlink
+import local.yoshida_eth0.miracleheartlight.TransitionEasing.SharpTransition
+
+/**
+ * ライトの具体的な光り方（振る舞い）を定義するインターフェース。
+ * suspend関数であり、色の更新を行うためのactionコールバックを受け取る。
+ */
+fun interface LightBehavior {
+    suspend fun execute(action: (Color) -> Unit)
+}
 
 /**
  * ライトの点灯パターン（振る舞い）を定義するデータクラス。
  *
  * @property signal このライトアクションをトリガーする信号。
  * @property name パターンの名前（デバッグや識別に利用）。
- * @property behavior ライトの具体的な振る舞いを定義するコルーチン。色を引数として受け取る関数を介してUIに色を通知する。
+ * @property behavior ライトの具体的な振る舞いを定義する `LightBehavior` インターフェース。
  */
 data class LightAction(
     val signal: Int,
     val name: String,
-    val behavior: suspend ((Color) -> Unit) -> Unit
+    val behavior: LightBehavior?
 )
 
 /**
@@ -60,7 +68,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 22,
             name = "青点滅",
-            behavior = { action -> blinking(Color.Blue, 2500L, action) }
+            behavior = { action -> blinking(Color.Blue, 2400L, action) }
         ),
         LightAction(
             signal = 23,
@@ -70,12 +78,12 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 25,
             name = "赤オレンジピンク黄緑水青紫",
-            behavior = { action -> gradation(listOf(Color.Red, colorOrange, colorPink, Color.Yellow, Color.Green, colorLightBlue, Color.Blue, colorPurple), 1250L, action) }
+            behavior = { action -> gradation(listOf(Color.Red, colorOrange, colorPink, Color.Yellow, Color.Green, colorLightBlue, Color.Blue, colorPurple), 1200L, action) }
         ),
         LightAction(
             signal = 26,
             name = "水色点滅",
-            behavior = { action -> blinking(colorLightBlue, 2500L, action) }
+            behavior = { action -> blinking(colorLightBlue, 2400L, action) }
         ),
         LightAction(
             signal = 27,
@@ -85,7 +93,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 32,
             name = "紫青",
-            behavior = { action -> gradation2(listOf(colorPurple, colorPurple, Color.Blue), 1000L, 800L, action) }
+            behavior = { action -> gradation(listOf(colorPurple, Color.Blue), 1200L, action) }
         ),
         LightAction(
             signal = 35,
@@ -105,12 +113,12 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 57,
             name = "紫青高速",
-            behavior = { action -> gradation2(listOf(colorPurple, colorPurple, Color.Blue), 550L, 400L, action) }
+            behavior = { action -> gradation(listOf(colorPurple, colorPurple, Color.Blue), 400L, action) }
         ),
         LightAction(
             signal = 61,
             name = "長薄ピンク緑",
-            behavior = { action -> gradation2(listOf(colorPinkWhite, colorPinkWhite, Color.Green), 1250L, 1000L, action) }
+            behavior = { action -> gradation(listOf(colorPinkWhite, colorPinkWhite, Color.Green), 1000L, action) }
         ),
         LightAction(
             signal = 62,
@@ -125,7 +133,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 67,
             name = "長水色短黄",
-            behavior = { action -> gradation2(listOf(colorLightBlue, colorLightBlue, Color.Yellow), 1250L, 1000L, action) }
+            behavior = { action -> gradation(listOf(colorLightBlue, colorLightBlue, Color.Yellow), 1000L, action) }
         ),
         LightAction(
             signal = 70,
@@ -140,12 +148,12 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 78,
             name = "緑点滅",
-            behavior = { action -> blinking(Color.Green, 2500L, action) }
+            behavior = { action -> blinking(Color.Green, 2400L, action) }
         ),
         LightAction(
             signal = 90,
             name = "ピンク黄水",
-            behavior = { action -> gradation2(listOf(colorPink, Color.Yellow, colorLightBlue), 1250L, 1000L, action) },
+            behavior = { action -> gradation(listOf(colorPink, Color.Yellow, colorLightBlue), 1000L, action) },
         ),
         LightAction(
             signal = 95,
@@ -155,7 +163,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 99,
             name = "長ピンク短赤",
-            behavior = { action -> gradation2(listOf(colorPink, colorPink, Color.Red), 1250L,1000L, action) }
+            behavior = { action -> gradation(listOf(colorPink, colorPink, Color.Red),1000L, action) }
         ),
         LightAction(
             signal = 101,
@@ -170,7 +178,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
         LightAction(
             signal = 105,
             name = "高速赤オレンジピンク黄緑水色青紫",
-            behavior = { action -> gradation2(listOf(Color.Red, colorOrange, colorPink, Color.Yellow, Color.Green, colorLightBlue, Color.Blue, colorPurple), 700L, 590L, action) }
+            behavior = { action -> gradation(listOf(Color.Red, colorOrange, colorPink, Color.Yellow, Color.Green, colorLightBlue, Color.Blue, colorPurple), 600L, action) }
         ),
         LightAction(
             signal = 107,
@@ -213,7 +221,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
     suspend fun execute(signal: Int, action: (Color) -> Unit) {
         // マップから対応するLightActionを検索し、存在すればその振る舞いを実行する。
         val lightAction = patternMap[signal]
-        lightAction?.behavior?.invoke(action)
+        lightAction?.behavior?.execute(action)
     }
 
     // --- 以下、光の振る舞いを定義するためのプライベートヘルパーメソッド群 ---
@@ -285,10 +293,7 @@ class LightPattern(private val offColor: Color = Color.Black) {
 
             // 進行度を計算 (0.0 -> 1.0)
             val progress = elapsedTime.toFloat() / durationMillis
-            // 進行度を角度に変換 (0 -> PI)
-            val angle = progress * PI
-            // sinカーブで輝度の割合を計算 (0 -> 1 -> 0)
-            val fraction = sin(angle).toFloat()
+            val fraction = SharpBlink.transform(progress)
 
             // 開始色(offColor)と目的色(color)を線形補間
             val blendedColor = lerp(start = offColor, stop = color, fraction = fraction)
@@ -317,47 +322,11 @@ class LightPattern(private val offColor: Color = Color.Black) {
                 transition(
                     from = currentColor,
                     to = color,
-                    // 最初の色への遷移は半分の時間で行う
-                    durationMillis = if (currentColor != offColor) durationMillis else durationMillis / 2,
+                    durationMillis = durationMillis,
                     action
                 )
                 currentColor = color
             }
-        }
-    }
-
-    /**
-     * `gradation` の特殊版。ループの初回と2回目以降で遷移時間が異なる。
-     *
-     * @param colors グラデーションさせる色のリスト。
-     * @param durationMillis ループ初回での各色間の遷移時間。
-     * @param durationMillis2 ループ2回目以降での各色間の遷移時間。
-     * @param action 色を通知するためのコールバック。
-     */
-    private suspend fun gradation2(colors: List<Color>, durationMillis: Long, durationMillis2: Long, action: (Color) -> Unit) {
-        var currentColor = offColor
-        var loopCount = 0
-
-        while (true) {
-            colors.forEachIndexed { index, color ->
-                val duration = when {
-                    // 初回の最初の遷移は半分の時間
-                    loopCount == 0 && index == 0 -> durationMillis / 2
-                    // 初回ループのそれ以降の遷移
-                    loopCount == 0 -> durationMillis
-                    // 2回目以降のループの遷移
-                    else -> durationMillis2
-                }
-
-                transition(
-                    from = currentColor,
-                    to = color,
-                    durationMillis = duration,
-                    action
-                )
-                currentColor = color
-            }
-            loopCount++
         }
     }
 
@@ -378,8 +347,9 @@ class LightPattern(private val offColor: Color = Color.Black) {
         while (elapsedTime < durationMillis) {
             elapsedTime = System.currentTimeMillis() - startTime
 
-            // 進行度を計算 (0.0 -> 1.0)。coerceInで範囲内に収める
-            val fraction = (elapsedTime.toFloat() / durationMillis).coerceIn(0f, 1f)
+            // 進行度を計算 (0.0 -> 1.0)
+            val progress = elapsedTime.toFloat() / durationMillis
+            val fraction = SharpTransition.transform(progress)
             val blendedColor = lerp(start = from, stop = to, fraction = fraction)
             action(blendedColor)
 

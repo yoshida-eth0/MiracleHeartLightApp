@@ -259,23 +259,6 @@ class LightPattern(private val offColor: Color = Color.Black) {
     }
 
     /**
-     * 2つの異なる色の点滅を交互に繰り返す。
-     *
-     * @param color1 1つ目の点滅色。
-     * @param color2 2つ目の点滅色。
-     * @param durationMillis1 1つ目の色の点滅時間。
-     * @param durationMillis2 2つ目の色の点滅時間。
-     * @param action 色を通知するためのコールバック。
-     */
-    private suspend fun blinking2(color1: Color, color2: Color, durationMillis1: Long, durationMillis2: Long, action: (Color) -> Unit) {
-        while (true) {
-            blinkOnce(color1, durationMillis1, action)
-            blinkOnce(color2, durationMillis2, action)
-        }
-    }
-
-
-    /**
      * 指定された色で1回だけ点滅（フェードイン・フェードアウト）を行う。
      * `sin` カーブを利用して滑らかな輝度変化を実現する。
      *

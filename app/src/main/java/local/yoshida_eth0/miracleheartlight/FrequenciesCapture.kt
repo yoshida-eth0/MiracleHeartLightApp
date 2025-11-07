@@ -143,6 +143,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
                 for (i in 0 until config.fftSize) {
                     fftBuffer[i] = audioBuffer[i].toDouble()
                 }
+                applyHanningWindow(fftBuffer)
 
                 // 2. FFT（実数フォワード変換）を実行
                 fft.realForward(fftBuffer)
@@ -155,6 +156,19 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
                 // 4. 計算結果をリスナーに通知
                 onFrequenciesCaptured?.invoke(frequencyMagnitudes)
             }
+        }
+    }
+
+    /**
+     * 音声データにハニング窓（Hanning Window）を適用する。
+     *
+     * @param data 窓関数を適用する音声データの配列（Double型）。この配列の要素は直接変更される。
+     */
+    private fun applyHanningWindow(data: DoubleArray) {
+        for (i in data.indices) {
+            // ハニング窓の計算式
+            val multiplier = 0.5 * (1 - kotlin.math.cos(2 * kotlin.math.PI * i / (data.size - 1)))
+            data[i] = data[i] * multiplier
         }
     }
 
@@ -172,7 +186,10 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
         if (index >= 0 && index < config.fftSize / 2) {
             val real = fftBuffer[2 * index]
             val imag = fftBuffer[2 * index + 1]
-            return hypot(real, imag)
+            val magnitude = hypot(real, imag)
+            // FFTの振幅は N/2 で割ることで、元の信号の振幅スケールに近づく
+            // さらに窓関数によるエネルギー損失を補正するため、通常は2を掛ける
+            return (magnitude / (config.fftSize / 2)) * 2
         }
         throw IndexOutOfBoundsException("Index $index is out of bounds for FFT results (size: ${config.fftSize / 2}).")
     }

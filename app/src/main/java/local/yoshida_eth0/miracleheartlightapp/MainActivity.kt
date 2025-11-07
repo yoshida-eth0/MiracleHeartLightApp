@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import local.yoshida_eth0.miracleheartlight.AudioSynthesizer
 import local.yoshida_eth0.miracleheartlight.FrequenciesCapture
 import local.yoshida_eth0.miracleheartlight.LightAction
 import local.yoshida_eth0.miracleheartlight.LightPattern
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var capture: FrequenciesCapture
     private lateinit var analyzer: SignalAnalyzer
     private lateinit var lightPattern: LightPattern
+    private lateinit var synthesizer: AudioSynthesizer
 
     // --- UIの状態を保持するStateを定義 ---
     // 周波数とその強度を保持するState
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
             if (isGranted) {
                 // 権限が許可された場合はキャプチャを開始
                 capture.start()
+                synthesizer.start()
             } else {
                 // 権限が拒否された場合はエラーログを出力
                 Log.e("MainActivity", "Permission for RECORD_AUDIO was denied.")
@@ -79,10 +82,13 @@ class MainActivity : ComponentActivity() {
         capture = FrequenciesCapture(this)
         analyzer = SignalAnalyzer()
         lightPattern = LightPattern()
+        synthesizer = AudioSynthesizer()
 
         // --- リスナー内でStateを更新 ---
         // FrequenciesCaptureからのコールバックを設定
         capture.onFrequenciesCaptured = { newMagnitudes ->
+            // 音声合成クラスに周波数データを渡す
+            synthesizer.synthesizeAndPlay(newMagnitudes)
             // SignalAnalyzerに新しい周波数データを渡して更新
             analyzer.update(newMagnitudes)
             // UI表示用にStateを更新
@@ -127,7 +133,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
 
         enableEdgeToEdge()
         setContent {
@@ -245,11 +250,17 @@ class MainActivity : ComponentActivity() {
         capture.stop()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        synthesizer.release()
+    }
+
     private fun checkPermissionAndStartCapture() {
         when (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)) {
             PackageManager.PERMISSION_GRANTED -> {
                 // すでに権限がある場合はキャプチャを開始
                 capture.start()
+                synthesizer.start()
             }
             else -> {
                 // 権限がない場合はリクエストダイアログを表示
@@ -264,7 +275,7 @@ fun FrequencyBarGraph(
     magnitudes: Map<Int, Float>,
     modifier: Modifier = Modifier
 ) {
-    val normalizationCap = 40_000f
+    val normalizationCap = 40f
 
     Row(
         modifier = modifier

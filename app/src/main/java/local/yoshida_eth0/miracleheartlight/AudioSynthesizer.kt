@@ -37,7 +37,7 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
 
     companion object {
         // 制御周波数と可聴域周波数のマッピング
-        val freqMap = mapOf<Int, Double>(
+        val audibleFreqMap = mapOf<Int, Double>(
             18500 to 1046.502,
             18750 to 1174.659,
             19000 to 1318.510,
@@ -159,8 +159,8 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
             val complexArray = DoubleArray(config.fftSize * 2)
 
             magnitudes.forEach { (freq, magnitude) ->
-                val scaledFreq = freqMap[freq]!!
-                val index = (scaledFreq * config.fftSize / config.sampleRate.toDouble()).toInt()
+                val audibleFreq = audibleFreqMap[freq]!!
+                val index = (audibleFreq * config.fftSize / config.sampleRate.toDouble()).toInt()
                 if (index < config.fftSize) {
                     complexArray[index * 2] = (magnitude-noiseThreshold).coerceAtLeast(0.0) * gain
                 }

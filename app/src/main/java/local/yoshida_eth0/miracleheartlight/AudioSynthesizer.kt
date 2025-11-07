@@ -1,7 +1,7 @@
 package local.yoshida_eth0.miracleheartlight
 
+import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,14 +53,27 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
             AudioFormat.ENCODING_PCM_16BIT
         ) * 2
 
-        audioTrack = AudioTrack(
-            AudioManager.STREAM_MUSIC,
-            config.sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize,
-            AudioTrack.MODE_STREAM
-        )
+        audioTrack = AudioTrack.Builder()
+            // オーディオ属性の設定：音楽再生用の設定
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            // オーディオフォーマットの設定：サンプルレート、チャンネル、エンコーディング
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(config.sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+            )
+            // バッファサイズの指定
+            .setBufferSizeInBytes(bufferSize)
+            // 転送モードの指定：ストリーミング再生
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
     }
 
     /**

@@ -56,7 +56,7 @@ class SignalAnalyzer (private val config: Config = Config.sharedInstance) {
      *
      * @param frequencyMagnitudes 周波数とその強度のマップ。
      */
-    fun update(frequencyMagnitudes: Map<Int, Double>) {
+    fun update(frequencyMagnitudes: Map<Int, Float>) {
         // 最強周波数のシーケンスを更新
         recentStrongestFrequencies.add(getStrongestFrequency(frequencyMagnitudes))
         if (recentStrongestFrequencies.size > analyzeSize) {
@@ -78,7 +78,7 @@ class SignalAnalyzer (private val config: Config = Config.sharedInstance) {
      * @param frequencyMagnitudes 周波数とその強度のマップ。
      * @return 最も強い周波数。条件を満たさない、またはマップが空の場合は0を返す。
      */
-    fun getStrongestFrequency(frequencyMagnitudes: Map<Int, Double>): Int {
+    fun getStrongestFrequency(frequencyMagnitudes: Map<Int, Float>): Int {
         if (frequencyMagnitudes.isEmpty()) {
             return 0
         }

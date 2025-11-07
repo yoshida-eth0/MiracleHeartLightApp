@@ -7,7 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.jtransforms.fft.DoubleFFT_1D
+import org.jtransforms.fft.FloatFFT_1D
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
 
     private val audioTrack: AudioTrack
-    private val fft = DoubleFFT_1D(config.fftSize.toLong())
+    private val fft = FloatFFT_1D(config.fftSize.toLong())
     private val scope = CoroutineScope(Dispatchers.Default)
     private val pcmBuffer = ArrayBlockingQueue<ShortArray>(4)
 
@@ -30,19 +30,19 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
     // 解析するノイズレベルのシーケンスのサイズ。過去2秒間を解析対象とする。
     private val noiseAnalyseSize = config.sampleRate / config.fftSize * 2
     // 直近のノイズレベルのシーケンスを保持するスレッドセーフなキュー。
-    private val recentNoiseLevels: ConcurrentLinkedQueue<Double> = ConcurrentLinkedQueue(List(noiseAnalyseSize) { 0.0 })
+    private val recentNoiseLevels: ConcurrentLinkedQueue<Float> = ConcurrentLinkedQueue(List(noiseAnalyseSize) { 0.0f })
 
     @Volatile
-    var gain = 2.0
+    var gain = 2.0f
 
     companion object {
         // 制御周波数と可聴域周波数のマッピング
-        val audibleFreqMap = mapOf<Int, Double>(
-            18500 to 1046.502,
-            18750 to 1174.659,
-            19000 to 1318.510,
-            19250 to 1396.913,
-            19500 to 1567.982,
+        val audibleFreqMap = mapOf<Int, Float>(
+            18500 to 1046.502f,
+            18750 to 1174.659f,
+            19000 to 1318.510f,
+            19250 to 1396.913f,
+            19500 to 1567.982f,
         )
     }
 
@@ -128,9 +128,9 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
     /**
      * 周波数と強度のマップを受け取り、それを音声波形に変換して再生する。
      *
-     * @param magnitudes 周波数(Int)と強度(Double)のマップ。
+     * @param magnitudes 周波数(Int)と強度(Float)のマップ。
      */
-    fun synthesizeAndPlay(magnitudes: Map<Int, Double>) {
+    fun synthesizeAndPlay(magnitudes: Map<Int, Float>) {
         // isPlayingがfalse、またはバッファに空きがなければ何もしない
         if (!isPlaying || pcmBuffer.remainingCapacity() == 0) {
             return
@@ -145,7 +145,7 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
             val maxEntry = magnitudes.maxBy { it.value }
 
             // 最大強度以外の周波数の平均強度を計算
-            val noiseLevel = magnitudes.filter { it.key != maxEntry.key }.values.average()
+            val noiseLevel = magnitudes.filter { it.key != maxEntry.key }.values.average().toFloat()
 
             // ノイズレベルのシーケンスを更新
             recentNoiseLevels.add(noiseLevel)
@@ -154,15 +154,15 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
             }
 
             // 直近のノイズレベルの平均値（平滑化されたノイズ閾値）を計算
-            val noiseThreshold = recentNoiseLevels.toList().average()
+            val noiseThreshold = recentNoiseLevels.toList().average().toFloat()
 
-            val complexArray = DoubleArray(config.fftSize * 2)
+            val complexArray = FloatArray(config.fftSize * 2)
 
             magnitudes.forEach { (freq, magnitude) ->
                 val audibleFreq = audibleFreqMap[freq]!!
-                val index = (audibleFreq * config.fftSize / config.sampleRate.toDouble()).toInt()
+                val index = (audibleFreq * config.fftSize / config.sampleRate).toInt()
                 if (index < config.fftSize) {
-                    complexArray[index * 2] = (magnitude-noiseThreshold).coerceAtLeast(0.0) * gain
+                    complexArray[index * 2] = (magnitude-noiseThreshold).coerceAtLeast(0.0f) * gain
                 }
             }
 
@@ -170,7 +170,7 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
 
             val pcmData = ShortArray(config.fftSize) { i ->
                 // 値をShortの範囲 (-32768 ~ 32767) に収める
-                val value = complexArray[i].coerceIn(-1.0, 1.0)
+                val value = complexArray[i].coerceIn(-1.0f, 1.0f)
                 (value * Short.MAX_VALUE).toInt().toShort()
             }
 

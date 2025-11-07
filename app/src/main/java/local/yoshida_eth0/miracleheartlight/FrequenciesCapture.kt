@@ -9,8 +9,9 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import androidx.core.content.ContextCompat
-import org.jtransforms.fft.DoubleFFT_1D
+import org.jtransforms.fft.FloatFFT_1D
 import kotlin.concurrent.thread
+import kotlin.math.PI
 import kotlin.math.hypot
 
 /**
@@ -18,7 +19,7 @@ import kotlin.math.hypot
  *
  * @param magnitudes キーが周波数（Hz）、値がその強度（magnitude）のマップ。
  */
-typealias OnFrequenciesCapturedListener = (magnitudes: Map<Int, Double>) -> Unit
+typealias OnFrequenciesCapturedListener = (magnitudes: Map<Int, Float>) -> Unit
 
 /**
  * マイクから継続的に音声を取得し、FFT（高速フーリエ変換）を実行して特定の周波数の強度を解析するクラス。
@@ -46,11 +47,11 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
     }
 
     // JTransformsライブラリを使用したFFTインスタンス
-    private val fft = DoubleFFT_1D(config.fftSize.toLong())
+    private val fft = FloatFFT_1D(config.fftSize.toLong())
 
     // 解析対象の周波数と、FFT結果配列におけるその周波数のインデックスをマッピングするマップ。
     private val targetFrequencyIndices: Map<Int, Int> = targetFrequencies.associateWith { freq ->
-        getIndexOfFrequency(freq.toDouble())
+        getIndexOfFrequency(freq.toFloat())
     }
 
 
@@ -133,15 +134,15 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
      */
     private fun processAudioStream() {
         val audioBuffer = ShortArray(config.fftSize)
-        val fftBuffer = DoubleArray(config.fftSize * 2) // FFTの入力と出力用のバッファ
+        val fftBuffer = FloatArray(config.fftSize * 2) // FFTの入力と出力用のバッファ
 
         while (isRecording) {
             val readSize = audioRecord?.read(audioBuffer, 0, config.fftSize) ?: -1
             if (readSize > 0) {
                 // --- FFT処理 ---
-                // 1. 読み込んだShort型の音声データをDouble型に変換
+                // 1. 読み込んだShort型の音声データをFloat型に変換
                 for (i in 0 until config.fftSize) {
-                    fftBuffer[i] = audioBuffer[i].toDouble()
+                    fftBuffer[i] = audioBuffer[i].toFloat()
                 }
                 applyHanningWindow(fftBuffer)
 
@@ -149,7 +150,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
                 fft.realForward(fftBuffer)
 
                 // 3. 対象周波数ごとに強度（magnitude）を計算
-                val frequencyMagnitudes: Map<Int, Double> = targetFrequencyIndices.mapValues { (_, index) ->
+                val frequencyMagnitudes: Map<Int, Float> = targetFrequencyIndices.mapValues { (_, index) ->
                     calculateAverageMagnitudeAroundIndex(fftBuffer, index)
                 }
 
@@ -162,12 +163,12 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
     /**
      * 音声データにハニング窓（Hanning Window）を適用する。
      *
-     * @param data 窓関数を適用する音声データの配列（Double型）。この配列の要素は直接変更される。
+     * @param data 窓関数を適用する音声データの配列（Float型）。この配列の要素は直接変更される。
      */
-    private fun applyHanningWindow(data: DoubleArray) {
+    private fun applyHanningWindow(data: FloatArray) {
         for (i in data.indices) {
             // ハニング窓の計算式
-            val multiplier = 0.5 * (1 - kotlin.math.cos(2 * kotlin.math.PI * i / (data.size - 1)))
+            val multiplier = 0.5f * (1f - kotlin.math.cos(2f * PI.toFloat() * i / (data.size - 1)))
             data[i] = data[i] * multiplier
         }
     }
@@ -181,7 +182,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
      * @return 計算された振幅。
      * @throws IndexOutOfBoundsException インデックスがFFT結果の有効範囲外の場合。
      */
-    private fun calculateMagnitudeForIndex(fftBuffer: DoubleArray, index: Int): Double {
+    private fun calculateMagnitudeForIndex(fftBuffer: FloatArray, index: Int): Float {
         // インデックスがFFT結果の有効範囲内（ナイキスト周波数まで）か確認
         if (index >= 0 && index < config.fftSize / 2) {
             val real = fftBuffer[2 * index]
@@ -189,7 +190,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
             val magnitude = hypot(real, imag)
             // FFTの振幅は N/2 で割ることで、元の信号の振幅スケールに近づく
             // さらに窓関数によるエネルギー損失を補正するため、通常は2を掛ける
-            return (magnitude / (config.fftSize / 2)) * 2
+            return (magnitude / (config.fftSize / 2f)) * 2f
         }
         throw IndexOutOfBoundsException("Index $index is out of bounds for FFT results (size: ${config.fftSize / 2}).")
     }
@@ -202,15 +203,15 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
      * @param index 中心となる周波数のインデックス。
      * @return 計算された周辺振幅の平均値。
      */
-    private fun calculateAverageMagnitudeAroundIndex(fftBuffer: DoubleArray, index: Int): Double {
-        val magnitudes = mutableListOf<Double>()
+    private fun calculateAverageMagnitudeAroundIndex(fftBuffer: FloatArray, index: Int): Float {
+        val magnitudes = mutableListOf<Float>()
         val neighborCount = config.fftNeighborCount
         // 中心インデックスの前後 `neighborCount` の範囲でループ
         for (i in (index - neighborCount)..(index + neighborCount)) {
             magnitudes.add(calculateMagnitudeForIndex(fftBuffer, i))
         }
         // 収集した振幅の平均値を返す
-        return magnitudes.average()
+        return magnitudes.average().toFloat()
     }
 
     /**
@@ -219,7 +220,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
      * @param frequency 変換したい周波数（Hz）。
      * @return FFT配列に対応するインデックス。
      */
-    private fun getIndexOfFrequency(frequency: Double): Int {
+    private fun getIndexOfFrequency(frequency: Float): Int {
         return (frequency * config.fftSize / config.sampleRate).toInt()
     }
 }

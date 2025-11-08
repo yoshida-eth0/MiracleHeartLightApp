@@ -92,17 +92,17 @@ class MainActivity : ComponentActivity() {
             // SignalAnalyzerに新しい周波数データを渡して更新
             analyzer.update(newMagnitudes)
             // UI表示用にStateを更新
-            _frequencyMagnitudes.value = newMagnitudes.mapValues { it.value.toFloat() }
+            _frequencyMagnitudes.value = newMagnitudes
         }
 
         // SignalAnalyzerからのコールバックを設定
         analyzer.onSignalChanged = { signal ->
             // UIの更新はメインスレッドのCoroutineScopeで実行
             lifecycleScope.launch {
-                if (lightPattern.patternMap.containsKey(signal)) {
+                val lightAction = lightPattern.patternMap[signal]
+                if (lightAction != null) {
                     // 定義済みのシグナルの場合
                     Log.d("MainActivity", "defined signal: $signal")
-                    val lightAction = lightPattern.patternMap[signal]!!
                     // シグナル名を表示用に更新
                     _detectedLightAction.value = lightAction
 
@@ -136,77 +136,12 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            MiracleHeartLightAppTheme {
-                // 画面全体を上下に分割するColumn
-                Column(modifier = Modifier.fillMaxSize()) {
-
-                    // 上半分：ライトの色を表示する領域
-                    Box(
-                        modifier = Modifier
-                            .weight(1f) // 上半分を占める
-                            .fillMaxWidth()
-                            .background(lightColor.value) // Stateに連動した背景色
-                    )
-
-                    // 中間：LightAction名表示
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.DarkGray)
-                            .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
-                        verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
-                    ) {
-                        // 表示中のシグナル名を表示
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "表示",
-                                color = Color.LightGray, // ラベルの色を薄いグレーに
-                                fontSize = 16.sp,
-                                modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
-                            )
-                            Text(
-                                text = activeLightAction.value?.let { "${it.signal}: ${it.name}" } ?: "---",
-                                color = Color.White,
-                                fontSize = 16.sp
-                            )
-                        }
-
-                        // 検出されたシグナル名を表示
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "検出",
-                                color = Color.LightGray, // ラベルの色を薄いグレーに
-                                fontSize = 16.sp,
-                                modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
-                            )
-                            Text(
-                                text = detectedLightAction.value?.let { "${it.signal}: ${it.name}" } ?: "---",
-                                color = Color.White,
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
-
-                    // 下半分：周波数の強度を可視化する棒グラフ
-                    Scaffold(
-                        modifier = Modifier
-                            .weight(1f) // 下半分を占める
-                            .fillMaxWidth(),
-                        containerColor = Color(0xFF1C1C1E)
-                    ) { innerPadding ->
-                        FrequencyBarGraph(
-                            magnitudes = frequencyMagnitudes.value,
-                            modifier = Modifier
-                                .padding(innerPadding)
-                                .fillMaxSize()
-                        )
-                    }
-                }
-            }
+            AppUI(
+                lightColor = lightColor.value,
+                activeLightAction = activeLightAction.value,
+                detectedLightAction = detectedLightAction.value,
+                frequencyMagnitudes = frequencyMagnitudes.value
+            )
         }
     }
 
@@ -270,6 +205,90 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * アプリケーションのメインUIを定義するコンポーザブル関数。
+ * プレビューと実際のUI描画の両方から利用される。
+ */
+@Composable
+fun AppUI(
+    lightColor: Color,
+    activeLightAction: LightAction?,
+    detectedLightAction: LightAction?,
+    frequencyMagnitudes: Map<Int, Float>
+) {
+    MiracleHeartLightAppTheme {
+        // 画面全体を上下に分割するColumn
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // 上半分：ライトの色を表示する領域
+            Box(
+                modifier = Modifier
+                    .weight(2f) // 上半分を占める
+                    .fillMaxWidth()
+                    .background(lightColor) // Stateに連動した背景色
+            )
+
+            // 中間：LightAction名表示
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.DarkGray)
+                    .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
+                verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
+            ) {
+                // 表示中のシグナル名を表示
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "表示",
+                        color = Color.LightGray, // ラベルの色を薄いグレーに
+                        fontSize = 16.sp,
+                        modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
+                    )
+                    Text(
+                        text = activeLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                }
+
+                // 検出されたシグナル名を表示
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "検出",
+                        color = Color.LightGray, // ラベルの色を薄いグレーに
+                        fontSize = 16.sp,
+                        modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
+                    )
+                    Text(
+                        text = detectedLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+
+            // 下半分：周波数の強度を可視化する棒グラフ
+            Scaffold(
+                modifier = Modifier
+                    .weight(1f) // 下半分を占める
+                    .fillMaxWidth(),
+                containerColor = Color(0xFF1C1C1E)
+            ) { innerPadding ->
+                FrequencyBarGraph(
+                    magnitudes = frequencyMagnitudes,
+                    modifier = Modifier
+                        .padding(innerPadding)
+                        .fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun FrequencyBarGraph(
     magnitudes: Map<Int, Float>,
@@ -291,13 +310,20 @@ fun FrequencyBarGraph(
                 verticalArrangement = Arrangement.Bottom,
                 modifier = Modifier.weight(1f)
             ) {
-                val normalizedHeight = (magnitude / normalizationCap).coerceIn(0f, 0.9f)
                 Box(
                     modifier = Modifier
-                        .width(30.dp)
-                        .fillMaxHeight(normalizedHeight)
-                        .background(Color(0xFF008B8B))
-                )
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.BottomCenter // Box内の要素を下揃えにする
+                ) {
+                    val normalizedHeight = (magnitude / normalizationCap).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .width(30.dp)
+                            .fillMaxHeight(normalizedHeight)
+                            .background(Color(0xFF008B8B))
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "${freq}Hz",
@@ -313,13 +339,19 @@ fun FrequencyBarGraph(
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    MiracleHeartLightAppTheme {
-        val dummyData = mapOf(
-            18500 to 0f, 18750 to 0f, 19000 to 0f, 19250 to 0f, 19500 to 0f
-        )
-        FrequencyBarGraph(
-            magnitudes = dummyData,
-            modifier = Modifier.fillMaxSize()
-        )
+    // プレビュー用のダミーデータを定義
+    val dummyLightColor = Color(0xFFC0CB)
+    val dummyActiveAction = LightAction(95, "薄ピンク点滅(白)", null)
+    val dummyDetectedAction = LightAction(95, "薄ピンク点滅(白)", null)
+    val dummyMagnitudes = FrequenciesCapture.targetFrequencies.associateWith {
+        (10..40).random().toFloat()
     }
+
+    // AppUIにダミーデータを渡してプレビューする
+    AppUI(
+        lightColor = dummyLightColor,
+        activeLightAction = dummyActiveAction,
+        detectedLightAction = dummyDetectedAction,
+        frequencyMagnitudes = dummyMagnitudes
+    )
 }

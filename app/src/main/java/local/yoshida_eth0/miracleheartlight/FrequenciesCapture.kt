@@ -43,7 +43,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
         // 解析対象とする周波数のリスト（Hz）
-        private val targetFrequencies = intArrayOf(18500, 18750, 19000, 19250, 19500)
+        val targetFrequencies = intArrayOf(18500, 18750, 19000, 19250, 19500)
     }
 
     // JTransformsライブラリを使用したFFTインスタンス

@@ -33,7 +33,7 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
     private val recentNoiseLevels: ConcurrentLinkedQueue<Float> = ConcurrentLinkedQueue(List(noiseAnalyseSize) { 0.0f })
 
     @Volatile
-    var gain = 2.0f
+    var gain = 1.0f
 
     companion object {
         // 制御周波数と可聴域周波数のマッピング
@@ -156,21 +156,21 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
             // 直近のノイズレベルの平均値（平滑化されたノイズ閾値）を計算
             val noiseThreshold = recentNoiseLevels.toList().average().toFloat()
 
-            val complexArray = FloatArray(config.fftSize * 2)
+            val ifftBuffer = FloatArray(config.fftSize)
 
             magnitudes.forEach { (freq, magnitude) ->
                 val audibleFreq = audibleFreqMap[freq]!!
                 val index = (audibleFreq * config.fftSize / config.sampleRate).toInt()
                 if (index < config.fftSize) {
-                    complexArray[index * 2] = (magnitude-noiseThreshold).coerceAtLeast(0.0f) * gain
+                    ifftBuffer[index] = (magnitude-noiseThreshold).coerceAtLeast(0.0f) * gain
                 }
             }
 
-            fft.complexInverse(complexArray, true)
+            fft.realInverse(ifftBuffer, true)
 
             val pcmData = ShortArray(config.fftSize) { i ->
                 // 値をShortの範囲 (-32768 ~ 32767) に収める
-                val value = complexArray[i].coerceIn(-1.0f, 1.0f)
+                val value = ifftBuffer[i].coerceIn(-1.0f, 1.0f)
                 (value * Short.MAX_VALUE).toInt().toShort()
             }
 

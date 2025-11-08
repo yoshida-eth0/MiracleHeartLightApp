@@ -134,7 +134,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
      */
     private fun processAudioStream() {
         val audioBuffer = ShortArray(config.fftSize)
-        val fftBuffer = FloatArray(config.fftSize * 2) // FFTの入力と出力用のバッファ
+        val fftBuffer = FloatArray(config.fftSize)
 
         while (isRecording) {
             val readSize = audioRecord?.read(audioBuffer, 0, config.fftSize) ?: -1

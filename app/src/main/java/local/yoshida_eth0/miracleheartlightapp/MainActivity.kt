@@ -10,10 +10,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -140,7 +146,15 @@ class MainActivity : ComponentActivity() {
                 lightColor = lightColor.value,
                 activeLightAction = activeLightAction.value,
                 detectedLightAction = detectedLightAction.value,
-                frequencyMagnitudes = frequencyMagnitudes.value
+                frequencyMagnitudes = frequencyMagnitudes.value,
+                initialSensitivity = capture.sensitivity,
+                onSensitivityChanged = { newSensitivity ->
+                    capture.sensitivity = newSensitivity
+                },
+                initialGain = synthesizer.gain,
+                onGainChanged = { newGain ->
+                    synthesizer.gain = newGain
+                }
             )
         }
     }
@@ -209,81 +223,124 @@ class MainActivity : ComponentActivity() {
  * アプリケーションのメインUIを定義するコンポーザブル関数。
  * プレビューと実際のUI描画の両方から利用される。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppUI(
     lightColor: Color,
     activeLightAction: LightAction?,
     detectedLightAction: LightAction?,
-    frequencyMagnitudes: Map<Int, Float>
+    frequencyMagnitudes: Map<Int, Float>,
+    initialSensitivity: Float,
+    onSensitivityChanged: (Float) -> Unit,
+    initialGain: Float,
+    onGainChanged: (Float) -> Unit
 ) {
+    // コントロールパネルのスライダーの状態を保持するState
+    var sensitivity by remember { mutableFloatStateOf(initialSensitivity) }
+    var gain by remember { mutableFloatStateOf(initialGain) }
+
+    // ボトムシートの状態を保持するState
+    var showBottomSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+
     MiracleHeartLightAppTheme {
-        // 画面全体を上下に分割するColumn
-        Column(modifier = Modifier.fillMaxSize()) {
-
-            // 上半分：ライトの色を表示する領域
-            Box(
-                modifier = Modifier
-                    .weight(2f) // 上半分を占める
-                    .fillMaxWidth()
-                    .background(lightColor) // Stateに連動した背景色
-            )
-
-            // 中間：LightAction名表示
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+        ) {
+            // 画面全体を上下に分割するColumn
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.DarkGray)
-                    .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
-                verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
+                    .fillMaxSize()
+                    .clickable { showBottomSheet = true }
             ) {
-                // 表示中のシグナル名を表示
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+
+                // 上半分：ライトの色を表示する領域
+                Box(
+                    modifier = Modifier
+                        .weight(2f) // 上半分を占める
+                        .fillMaxWidth()
+                        .background(lightColor) // Stateに連動した背景色
+                )
+
+                // 中間：LightAction名表示
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.DarkGray)
+                        .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
+                    verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
                 ) {
-                    Text(
-                        text = "表示",
-                        color = Color.LightGray, // ラベルの色を薄いグレーに
-                        fontSize = 16.sp,
-                        modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
-                    )
-                    Text(
-                        text = activeLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
-                        color = Color.White,
-                        fontSize = 16.sp
-                    )
+                    // 表示中のシグナル名を表示
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "表示",
+                            color = Color.LightGray, // ラベルの色を薄いグレーに
+                            fontSize = 16.sp,
+                            modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
+                        )
+                        Text(
+                            text = activeLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    // 検出されたシグナル名を表示
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "検出",
+                            color = Color.LightGray, // ラベルの色を薄いグレーに
+                            fontSize = 16.sp,
+                            modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
+                        )
+                        Text(
+                            text = detectedLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
 
-                // 検出されたシグナル名を表示
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                // 下半分：周波数の強度を可視化する棒グラフ
+                Box(
+                    modifier = Modifier
+                        .weight(1f) // 下半分を占める
+                        .fillMaxWidth()
+                        .background(Color(0xFF1C1C1E))
                 ) {
-                    Text(
-                        text = "検出",
-                        color = Color.LightGray, // ラベルの色を薄いグレーに
-                        fontSize = 16.sp,
-                        modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
-                    )
-                    Text(
-                        text = detectedLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
-                        color = Color.White,
-                        fontSize = 16.sp
+                    FrequencyBarGraph(
+                        magnitudes = frequencyMagnitudes,
+                        modifier = Modifier
+                            .fillMaxSize()
                     )
                 }
             }
 
-            // 下半分：周波数の強度を可視化する棒グラフ
-            Scaffold(
-                modifier = Modifier
-                    .weight(1f) // 下半分を占める
-                    .fillMaxWidth(),
-                containerColor = Color(0xFF1C1C1E)
-            ) { innerPadding ->
-                FrequencyBarGraph(
-                    magnitudes = frequencyMagnitudes,
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .fillMaxSize()
-                )
+            // showBottomSheetがtrueのときだけ、画面下からシートが表示される
+            if (showBottomSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showBottomSheet = false },
+                    sheetState = sheetState
+                ) {
+                    ControlPanel(
+                        sensitivity = sensitivity,
+                        onSensitivityChanged = { newValue ->
+                            sensitivity = newValue
+                            onSensitivityChanged(newValue)
+                        },
+                        gain = gain,
+                        onGainChanged = { newValue ->
+                            gain = newValue
+                            onGainChanged(newValue)
+                        }
+                    )
+                }
             }
         }
     }
@@ -294,13 +351,11 @@ fun FrequencyBarGraph(
     magnitudes: Map<Int, Float>,
     modifier: Modifier = Modifier
 ) {
-    val normalizationCap = 40f
-
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(300.dp)
-            .padding(16.dp, 0.dp, 16.dp, 16.dp),
+            .fillMaxHeight()
+            .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
@@ -316,7 +371,7 @@ fun FrequencyBarGraph(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.BottomCenter // Box内の要素を下揃えにする
                 ) {
-                    val normalizedHeight = (magnitude / normalizationCap).coerceIn(0f, 1f)
+                    val normalizedHeight = magnitude.coerceIn(0f, 1f)
                     Box(
                         modifier = Modifier
                             .width(30.dp)
@@ -332,6 +387,52 @@ fun FrequencyBarGraph(
                     color = Color.White
                 )
             }
+        }
+    }
+}
+
+/**
+ * 感度と音量を調整するためのスライダーUIパネル。
+ */
+@Composable
+private fun ControlPanel(
+    sensitivity: Float,
+    onSensitivityChanged: (Float) -> Unit,
+    gain: Float,
+    onGainChanged: (Float) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp) // スライダー間のスペースを追加
+    ) {
+        // 感度スライダー
+        Column {
+            Text(
+                text = "感度: ${String.format("%.1f", sensitivity)}",
+                color = Color.Black,
+                fontSize = 14.sp
+            )
+            Slider(
+                value = sensitivity,
+                onValueChange = onSensitivityChanged,
+                valueRange = 1.0f..1000.0f
+            )
+        }
+
+        // 音量スライダー
+        Column {
+            Text(
+                text = "音量: ${String.format("%.1f", gain)}",
+                color = Color.Black,
+                fontSize = 14.sp
+            )
+            Slider(
+                value = gain,
+                onValueChange = onGainChanged,
+                valueRange = 0.0f..50.0f
+            )
         }
     }
 }
@@ -352,6 +453,10 @@ fun GreetingPreview() {
         lightColor = dummyLightColor,
         activeLightAction = dummyActiveAction,
         detectedLightAction = dummyDetectedAction,
-        frequencyMagnitudes = dummyMagnitudes
+        frequencyMagnitudes = dummyMagnitudes,
+        initialSensitivity = 100.0f,
+        onSensitivityChanged = {},
+        initialGain = 1.0f,
+        onGainChanged = {}
     )
 }

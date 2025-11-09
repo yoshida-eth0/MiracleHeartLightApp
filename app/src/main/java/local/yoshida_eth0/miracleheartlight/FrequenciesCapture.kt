@@ -13,6 +13,7 @@ import org.jtransforms.fft.FloatFFT_1D
 import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 /**
  * マイクから取得した音声データのFFT解析結果（周波数と強度のマップ）を通知するためのリスナーの型エイリアス。
@@ -37,6 +38,10 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
     private var audioRecord: AudioRecord? = null
     private var isRecording = false
     private var recordingThread: Thread? = null
+
+    // 感度
+    @Volatile
+    var sensitivity: Float = 40.0f
 
     companion object {
         // 音声録音に関する定数
@@ -142,7 +147,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
                 // --- FFT処理 ---
                 // 1. 読み込んだShort型の音声データをFloat型に変換
                 for (i in 0 until config.fftSize) {
-                    fftBuffer[i] = audioBuffer[i].toFloat()
+                    fftBuffer[i] = audioBuffer[i].toFloat() / Short.MAX_VALUE
                 }
                 applyHanningWindow(fftBuffer)
 
@@ -151,7 +156,7 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
 
                 // 3. 対象周波数ごとに強度（magnitude）を計算
                 val frequencyMagnitudes: Map<Int, Float> = targetFrequencyIndices.mapValues { (_, index) ->
-                    calculateAverageMagnitudeAroundIndex(fftBuffer, index)
+                    calculateMagnitudeForIndex(fftBuffer, index) * sensitivity
                 }
 
                 // 4. 計算結果をリスナーに通知
@@ -196,31 +201,12 @@ class FrequenciesCapture(private val context: Context, private val config: Confi
     }
 
     /**
-     * 特定の周波数インデックスの周辺を含む複数のインデックスで振幅を計算し、その平均値を返す。
-     * これにより、単一のインデックスの僅かなズレによる影響を緩和する。
-     *
-     * @param fftBuffer FFT計算後のバッファ。
-     * @param index 中心となる周波数のインデックス。
-     * @return 計算された周辺振幅の平均値。
-     */
-    private fun calculateAverageMagnitudeAroundIndex(fftBuffer: FloatArray, index: Int): Float {
-        val magnitudes = mutableListOf<Float>()
-        val neighborCount = config.fftNeighborCount
-        // 中心インデックスの前後 `neighborCount` の範囲でループ
-        for (i in (index - neighborCount)..(index + neighborCount)) {
-            magnitudes.add(calculateMagnitudeForIndex(fftBuffer, i))
-        }
-        // 収集した振幅の平均値を返す
-        return magnitudes.average().toFloat()
-    }
-
-    /**
      * 周波数（Hz）をFFTの結果配列におけるインデックスに変換する。
      *
      * @param frequency 変換したい周波数（Hz）。
      * @return FFT配列に対応するインデックス。
      */
     private fun getIndexOfFrequency(frequency: Float): Int {
-        return (frequency * config.fftSize / config.sampleRate).toInt()
+        return (frequency * config.fftSize / config.sampleRate).roundToInt()
     }
 }

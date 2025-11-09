@@ -32,8 +32,9 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
     // 直近のノイズレベルのシーケンスを保持するスレッドセーフなキュー。
     private val recentNoiseLevels: ConcurrentLinkedQueue<Float> = ConcurrentLinkedQueue(List(noiseAnalyseSize) { 0.0f })
 
+    // 音量
     @Volatile
-    var gain = 1.0f
+    var gain = 40.0f
 
     companion object {
         // 制御周波数と可聴域周波数のマッピング

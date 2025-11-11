@@ -265,61 +265,19 @@ fun AppUI(
                 )
 
                 // 中間：LightAction名表示
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.DarkGray)
-                        .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
-                    verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
-                ) {
-                    // 表示中のシグナル名を表示
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "表示",
-                            color = Color.LightGray, // ラベルの色を薄いグレーに
-                            fontSize = 16.sp,
-                            modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
-                        )
-                        Text(
-                            text = activeLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
-                            color = Color.White,
-                            fontSize = 16.sp
-                        )
-                    }
-
-                    // 検出されたシグナル名を表示
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "検出",
-                            color = Color.LightGray, // ラベルの色を薄いグレーに
-                            fontSize = 16.sp,
-                            modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
-                        )
-                        Text(
-                            text = detectedLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
-                            color = Color.White,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
+                InfoPanel(
+                    activeLightAction = activeLightAction,
+                    detectedLightAction = detectedLightAction
+                )
 
                 // 下半分：周波数の強度を可視化する棒グラフ
-                Box(
+                FrequencyBarGraph(
+                    magnitudes = frequencyMagnitudes,
                     modifier = Modifier
                         .weight(1f) // 下半分を占める
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .background(Color(0xFF1C1C1E))
-                ) {
-                    FrequencyBarGraph(
-                        magnitudes = frequencyMagnitudes,
-                        modifier = Modifier
-                            .fillMaxSize()
-                    )
-                }
+                )
             }
 
             // showBottomSheetがtrueのときだけ、画面下からシートが表示される
@@ -346,6 +304,60 @@ fun AppUI(
     }
 }
 
+/**
+ * 検出された信号と現在アクティブな信号の情報を表示するパネル。
+ *
+ * @param activeLightAction 現在再生中のライトパターンの情報。
+ * @param detectedLightAction 直近で検出された信号の情報。
+ */
+@Composable
+private fun InfoPanel(
+    activeLightAction: LightAction?,
+    detectedLightAction: LightAction?
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.DarkGray)
+            .padding(horizontal = 16.dp, vertical = 8.dp), // 全体のパディング
+        verticalArrangement = Arrangement.spacedBy(4.dp) // Row間のスペース
+    ) {
+        // 表示中のシグナル名を表示
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "表示",
+                color = Color.LightGray, // ラベルの色を薄いグレーに
+                fontSize = 16.sp,
+                modifier = Modifier.width(50.dp) // ラベルに固定幅を指定
+            )
+            Text(
+                text = activeLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
+                color = Color.White,
+                fontSize = 16.sp
+            )
+        }
+
+        // 検出されたシグナル名を表示
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "検出",
+                color = Color.LightGray, // ラベルの色を薄いグレーに
+                fontSize = 16.sp,
+                modifier = Modifier.width(50.dp) // ラベルに同じ固定幅を指定
+            )
+            Text(
+                text = detectedLightAction?.let { "${it.signal}: ${it.name}" } ?: "---",
+                color = Color.White,
+                fontSize = 16.sp
+            )
+        }
+    }
+}
+
 @Composable
 fun FrequencyBarGraph(
     magnitudes: Map<Int, Float>,
@@ -353,13 +365,12 @@ fun FrequencyBarGraph(
 ) {
     Row(
         modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
-        magnitudes.toSortedMap().forEach { (freq, magnitude) ->
+        FrequenciesCapture.targetFrequencies.forEach { freq ->
+            val magnitude = magnitudes[freq] ?: 0f
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom,

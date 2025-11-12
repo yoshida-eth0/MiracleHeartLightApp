@@ -9,14 +9,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -29,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import io.morfly.compose.bottomsheet.material3.BottomSheetScaffold
+import io.morfly.compose.bottomsheet.material3.rememberBottomSheetScaffoldState
+import io.morfly.compose.bottomsheet.material3.rememberBottomSheetState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import local.yoshida_eth0.miracleheartlight.AudioSynthesizer
@@ -219,11 +221,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+enum class SheetValue { InfoPanelExpanded, FrequencyBarGraphExpanded, ControlPanelExpanded }
+
 /**
  * アプリケーションのメインUIを定義するコンポーザブル関数。
  * プレビューと実際のUI描画の両方から利用される。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AppUI(
     lightColor: Color,
@@ -240,52 +244,42 @@ fun AppUI(
     var gain by remember { mutableFloatStateOf(initialGain) }
 
     // ボトムシートの状態を保持するState
-    var showBottomSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.FrequencyBarGraphExpanded,
+        defineValues = {
+            SheetValue.InfoPanelExpanded at height(115.dp)
+            SheetValue.FrequencyBarGraphExpanded at height(315.dp)
+            SheetValue.ControlPanelExpanded at contentHeight
+        }
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(sheetState)
 
     MiracleHeartLightAppTheme {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars)
-        ) {
-            // 画面全体を上下に分割するColumn
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable { showBottomSheet = true }
-            ) {
-
-                // 上半分：ライトの色を表示する領域
-                Box(
+        BottomSheetScaffold(
+            scaffoldState = scaffoldState,
+            sheetDragHandle = null,
+            sheetShape = RoundedCornerShape(0.dp),
+            sheetContent = {
+                Column(
                     modifier = Modifier
-                        .weight(2f) // 上半分を占める
-                        .fillMaxWidth()
-                        .background(lightColor) // Stateに連動した背景色
-                )
-
-                // 中間：LightAction名表示
-                InfoPanel(
-                    activeLightAction = activeLightAction,
-                    detectedLightAction = detectedLightAction
-                )
-
-                // 下半分：周波数の強度を可視化する棒グラフ
-                FrequencyBarGraph(
-                    magnitudes = frequencyMagnitudes,
-                    modifier = Modifier
-                        .weight(1f) // 下半分を占める
-                        .fillMaxSize()
-                        .background(Color(0xFF1C1C1E))
-                )
-            }
-
-            // showBottomSheetがtrueのときだけ、画面下からシートが表示される
-            if (showBottomSheet) {
-                ModalBottomSheet(
-                    onDismissRequest = { showBottomSheet = false },
-                    sheetState = sheetState
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
+                    // LightAction名表示
+                    InfoPanel(
+                        activeLightAction = activeLightAction,
+                        detectedLightAction = detectedLightAction
+                    )
+
+                    // 周波数の強度を可視化する棒グラフ
+                    FrequencyBarGraph(
+                        magnitudes = frequencyMagnitudes,
+                        modifier = Modifier
+                            .height(200.dp)
+                            .fillMaxSize()
+                            .background(Color(0xFF1C1C1E))
+                    )
+
+                    // コントロールパネル
                     ControlPanel(
                         sensitivity = sensitivity,
                         onSensitivityChanged = { newValue ->
@@ -299,8 +293,17 @@ fun AppUI(
                         }
                     )
                 }
+            },
+            content = {
+                // ライトの色を表示する領域
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .background(lightColor) // Stateに連動した背景色
+                )
             }
-        }
+        )
     }
 }
 

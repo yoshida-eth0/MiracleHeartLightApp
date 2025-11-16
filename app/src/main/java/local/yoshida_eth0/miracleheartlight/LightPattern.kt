@@ -2,7 +2,6 @@ package local.yoshida_eth0.miracleheartlight
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import androidx.core.graphics.toColorInt
 import kotlinx.coroutines.delay
 import local.yoshida_eth0.miracleheartlight.BlinkEasing.SharpBlink
 import local.yoshida_eth0.miracleheartlight.TransitionEasing.SharpTransition
@@ -39,11 +38,11 @@ class LightPattern(private val offColor: Color = Color.Black) {
     private val delayPerStep: Long = 50L
 
     // 事前定義された色の定数
-    private val colorPink: Color = color("#EA9198")
-    private val colorPinkWhite: Color = color("#FFC0CB")
-    private val colorPurple: Color = color("#A757A8")
-    private val colorLightBlue: Color = color("#9DCCE0")
-    private val colorOrange: Color = color("#FFA500")
+    private val colorPink: Color = Color(0xFFEA9198)
+    private val colorPinkWhite: Color = Color(0xFFFFC0CB)
+    private val colorPurple: Color = Color(0xFFA757A8)
+    private val colorLightBlue: Color = Color(0xFF9DCCE0)
+    private val colorOrange: Color = Color(0xFFFFA500)
 
     /**
      * 利用可能なすべてのライトパターンのマップ。
@@ -343,15 +342,5 @@ class LightPattern(private val offColor: Color = Color.Black) {
                 delay(delayTime)
             }
         }
-    }
-
-    /**
-     * 16進数のカラーコード文字列（例: "#FFFFFF"）をComposeの `Color` オブジェクトに変換する。
-     *
-     * @param hex 16進数カラーコード。
-     * @return 対応する `Color` オブジェクト。
-     */
-    private fun color(hex: String): Color {
-        return Color(hex.toColorInt())
     }
 }

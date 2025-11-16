@@ -39,6 +39,7 @@ import local.yoshida_eth0.miracleheartlight.LightAction
 import local.yoshida_eth0.miracleheartlight.LightPattern
 import local.yoshida_eth0.miracleheartlight.SignalAnalyzer
 import local.yoshida_eth0.miracleheartlightapp.ui.theme.MiracleHeartLightAppTheme
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -424,7 +425,7 @@ private fun ControlPanel(
         // 感度スライダー
         Column {
             Text(
-                text = "感度: ${String.format("%.1f", sensitivity)}",
+                text = "感度: ${String.format(Locale.US, "%.1f", sensitivity)}",
                 color = Color.Black,
                 fontSize = 14.sp
             )
@@ -438,7 +439,7 @@ private fun ControlPanel(
         // 音量スライダー
         Column {
             Text(
-                text = "音量: ${String.format("%.1f", gain)}",
+                text = "音量: ${String.format(Locale.US, "%.1f", gain)}",
                 color = Color.Black,
                 fontSize = 14.sp
             )
@@ -455,7 +456,7 @@ private fun ControlPanel(
 @Composable
 fun GreetingPreview() {
     // プレビュー用のダミーデータを定義
-    val dummyLightColor = Color(0xFFC0CB)
+    val dummyLightColor = Color(0xFFFFC0CB)
     val dummyActiveAction = LightAction(95, "薄ピンク点滅(白)", null)
     val dummyDetectedAction = LightAction(95, "薄ピンク点滅(白)", null)
     val dummyMagnitudes = FrequenciesCapture.targetFrequencies.associateWith {

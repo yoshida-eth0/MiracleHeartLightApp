@@ -95,7 +95,7 @@ class AudioSynthesizer(private val config: Config = Config.sharedInstance) {
                         audioTrack.write(data, 0, data.size)
                     }
                 }
-            } catch (e: InterruptedException) {
+            } catch (_: InterruptedException) {
                 // take()で待機中にスレッドが中断された場合の処理
                 Thread.currentThread().interrupt()
             }

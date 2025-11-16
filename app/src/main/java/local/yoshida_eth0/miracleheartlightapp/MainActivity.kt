@@ -459,7 +459,7 @@ fun GreetingPreview() {
     val dummyActiveAction = LightAction(95, "薄ピンク点滅(白)", null)
     val dummyDetectedAction = LightAction(95, "薄ピンク点滅(白)", null)
     val dummyMagnitudes = FrequenciesCapture.targetFrequencies.associateWith {
-        (10..40).random().toFloat()
+        (0..100).random().toFloat() / 100f
     }
 
     // AppUIにダミーデータを渡してプレビューする
@@ -468,9 +468,9 @@ fun GreetingPreview() {
         activeLightAction = dummyActiveAction,
         detectedLightAction = dummyDetectedAction,
         frequencyMagnitudes = dummyMagnitudes,
-        initialSensitivity = 100.0f,
+        initialSensitivity = 40.0f,
         onSensitivityChanged = {},
-        initialGain = 1.0f,
+        initialGain = 40.0f,
         onGainChanged = {}
     )
 }
